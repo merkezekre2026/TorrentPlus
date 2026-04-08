@@ -1,132 +1,123 @@
-```
+# Build artifacts
+bin/
+obj/
+*.dll
+*.exe
+*.pdb
+*.runtimeconfig.dev.json
+
 # Dependencies
+packages/
 node_modules/
+.nuget/
+.nvs/
+
+# Logs
+*.log
 
 # Environment
 .env
 .env.local
-.env.*
+*.env.*
 
 # Editors
 .vscode/
-
-# Logs and temp files
-*.log
-*.tmp
+.idea/
 *.swp
+*.swo
 
-# Build artifacts
-dist/
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Testing
+TestResults/
+
+# User-specific files
+*.user
+*.userosscache
+*.suo
+*.userprefs
+
+# Build results
+Debug/
+Release/
+x64/
+x86/
 build/
-target/
+dist/
 
-# Python
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
-env/
-venv/
-.venv/
-.egg-info/
-.eggs/
-.mypy_cache/
-.pytest_cache/
-.coverage
+# NuGet Packages
+*.nupkg
+*.snupkg
+packages.lock.json
+
+# Visual Studio cache/options
+.vs/
+*.VC.db
+*.VC.VC.opendb
+
+# Resharper
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.DotSettings.user
+*.resharper
+
+# Others
+*.tmp
+*.temp
+*.log
 coverage/
 htmlcov/
-
-# Java
-*.class
-*.jar
-*.war
-*.ear
+.coverage
+.nyc_output/
+istanbul/
+.mypy_cache/
+.pytest_cache/
+.hypothesis/
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Icon?
+.directory
+.fuse_hidden*
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+.loadpath
+.c9/
+.cache
+.gitattributes
+*.orig
+.next
+.nuxt
+.vercel
+.svelte-kit
+dist/
+build/
+.node_repl_history
+*.tgz
 *.tar
+*.gz
+*.zip
+*.rar
+*.7z
+*.bz2
+*.xz
+*.zst
+*.lz4
+*.lzh
+*.cab
+*.arj
+*.rpm
+*.deb
+*.Z
+*.lz
+*.lzo
 *.tar.gz
 *.tar.bz2
 *.tar.xz
-*.zip
-*.gz
-*.bz2
-*.xz
-*.7z
-*.rar
-*.zst
-*.lz4
-*.lzh
-*.cab
-*.arj
-*.rpm
-*.deb
-*.Z
-*.lz
-*.lzo
-
-# C/C++
-*.o
-*.obj
-*.so
-*.a
-*.dll
-*.exe
-*.out
-
-# Go
-*.a
-*.o
-*.so
-*.exe
-*.test
-*.prof
-*.zip
-*.gz
-*.tar
-*.tgz
-*.bz2
-*.xz
-*.7z
-*.rar
-*.zst
-*.lz4
-*.lzh
-*.cab
-*.arj
-*.rpm
-*.deb
-*.Z
-*.lz
-*.lzo
-
-# Rust
-target/
-Cargo.lock
-
-# Ruby
-*.gem
-*.rbc
-*.sass-cache
-.bundle/
-vendor/bundle/
-
-# Node.js
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# macOS
-.DS_Store
-.AppleDouble
-.LSOverride
-Icon?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-
-# Windows
-Desktop.ini
-$RECYCLE.BIN/
-Thumbs.db
-```
+*.tar.zst
