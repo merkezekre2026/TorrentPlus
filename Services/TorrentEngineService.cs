@@ -63,14 +63,13 @@ namespace TorrentClient.Services
                 _logger.Info("Torrent motoru başlatılıyor...");
                 
                 // ClientEngine ayarları
-                var settings = new EngineSettingsBuilder
+                var settings = new EngineSettings
                 {
                     CacheDirectory = _downloadPath,
-                    HttpListenEndPoints = { new System.Net.IPEndPoint(System.Net.IPAddress.Any, 0) },
                     ListenEndPoints = { new System.Net.IPEndPoint(System.Net.IPAddress.Any, 51413) }
                 };
 
-                _engine = new ClientEngine(settings.Build());
+                _engine = new ClientEngine(settings);
                 IsEngineReady = true;
                 StatusMessage = "Motor hazır";
                 
