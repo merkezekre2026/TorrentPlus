@@ -1,10 +1,12 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Linq;
+using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
 using MonoTorrent;
 using MonoTorrent.Client;
 using TorrentClient.Models;
@@ -18,7 +20,7 @@ namespace TorrentClient.Services
     public partial class TorrentEngineService : ObservableObject, IDisposable
     {
         private ClientEngine? _engine;
-        private TorrentManager? _currentManager;
+        private readonly Dictionary<string, TorrentManager> _managers = new();
         private CancellationTokenSource? _updateCts;
         private bool _isDisposed;
         private readonly string _downloadPath;
@@ -62,12 +64,15 @@ namespace TorrentClient.Services
             {
                 _logger.Info("Torrent motoru başlatılıyor...");
                 
-                // ClientEngine ayarları
-                var settings = new EngineSettings
-                {
-                    CacheDirectory = _downloadPath,
-                    ListenEndPoints = { new System.Net.IPEndPoint(System.Net.IPAddress.Any, 51413) }
-                };
+                // ClientEngine ayarları - MonoTorrent 3.0 API
+                var settings = new EngineSettings(
+                    cacheDirectory: _downloadPath,
+                    listenEndPoints: new Dictionary<string, IPEndPoint>
+                    {
+                        { "ipv4", new IPEndPoint(IPAddress.Any, 51413) },
+                        { "ipv6", new IPEndPoint(IPAddress.IPv6Any, 51414) }
+                    }
+                );
 
                 _engine = new ClientEngine(settings);
                 IsEngineReady = true;
@@ -100,6 +105,7 @@ namespace TorrentClient.Services
                 var torrent = await Torrent.LoadAsync(magnetLink);
                 
                 var torrentManager = await _engine.AddAsync(torrent, _downloadPath);
+                _managers[torrent.InfoHashes.V1OrV2.ToString()] = torrentManager;
                 
                 var torrentInfo = new TorrentInfo
                 {
@@ -107,7 +113,7 @@ namespace TorrentClient.Services
                     Hash = torrent.InfoHashes.V1OrV2.ToString(),
                     MagnetLink = magnetLink,
                     TotalSize = torrent.Size,
-                    State = TorrentState.NotStarted,
+                    State = Models.TorrentState.NotStarted,
                     AddedDate = DateTime.Now
                 };
 
@@ -143,13 +149,14 @@ namespace TorrentClient.Services
                 var torrent = await Torrent.LoadAsync(filePath);
                 
                 var torrentManager = await _engine.AddAsync(torrent, _downloadPath);
+                _managers[torrent.InfoHashes.V1OrV2.ToString()] = torrentManager;
                 
                 var torrentInfo = new TorrentInfo
                 {
                     Name = torrent.Name ?? Path.GetFileNameWithoutExtension(filePath),
                     Hash = torrent.InfoHashes.V1OrV2.ToString(),
                     TotalSize = torrent.Size,
-                    State = TorrentState.NotStarted,
+                    State = Models.TorrentState.NotStarted,
                     AddedDate = DateTime.Now
                 };
 
@@ -177,17 +184,19 @@ namespace TorrentClient.Services
 
             try
             {
-                var manager = await _engine.FindAsync(torrentInfo.Hash);
-                if (manager != null)
+                if (!_managers.TryGetValue(torrentInfo.Hash, out var manager))
                 {
-                    await manager.StartAsync();
-                    torrentInfo.State = TorrentState.Downloading;
-                    
-                    // Durum güncellemelerini başlat
-                    StartStatusUpdates(manager, torrentInfo);
-                    
-                    _logger.Info($"Torrent başlatıldı: {torrentInfo.Name}");
+                    _logger.Warning($"Torrent manager bulunamadı: {torrentInfo.Hash}");
+                    return;
                 }
+
+                await manager.StartAsync();
+                torrentInfo.State = Models.TorrentState.Downloading;
+                
+                // Durum güncellemelerini başlat
+                StartStatusUpdates(manager, torrentInfo);
+                
+                _logger.Info($"Torrent başlatıldı: {torrentInfo.Name}");
             }
             catch (Exception ex)
             {
@@ -203,13 +212,15 @@ namespace TorrentClient.Services
         {
             try
             {
-                var manager = await _engine!.FindAsync(torrentInfo.Hash);
-                if (manager != null)
+                if (!_managers.TryGetValue(torrentInfo.Hash, out var manager))
                 {
-                    await manager.StopAsync();
-                    torrentInfo.State = TorrentState.Paused;
-                    _logger.Info($"Torrent duraklatıldı: {torrentInfo.Name}");
+                    _logger.Warning($"Torrent manager bulunamadı: {torrentInfo.Hash}");
+                    return;
                 }
+
+                await manager.StopAsync();
+                torrentInfo.State = Models.TorrentState.Paused;
+                _logger.Info($"Torrent duraklatıldı: {torrentInfo.Name}");
             }
             catch (Exception ex)
             {
@@ -225,13 +236,15 @@ namespace TorrentClient.Services
         {
             try
             {
-                var manager = await _engine!.FindAsync(torrentInfo.Hash);
-                if (manager != null)
+                if (!_managers.TryGetValue(torrentInfo.Hash, out var manager))
                 {
-                    await manager.StopAsync();
-                    torrentInfo.State = TorrentState.Stopped;
-                    _logger.Info($"Torrent durduruldu: {torrentInfo.Name}");
+                    _logger.Warning($"Torrent manager bulunamadı: {torrentInfo.Hash}");
+                    return;
                 }
+
+                await manager.StopAsync();
+                torrentInfo.State = Models.TorrentState.Stopped;
+                _logger.Info($"Torrent durduruldu: {torrentInfo.Name}");
             }
             catch (Exception ex)
             {
@@ -260,19 +273,19 @@ namespace TorrentClient.Services
                         await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                         {
                             torrentInfo.Progress = stats.Progress * 100;
-                            torrentInfo.DownloadedBytes = stats.BytesDownloaded;
+                            torrentInfo.DownloadedBytes = (long)(stats.BytesDownloaded);
                             torrentInfo.DownloadSpeed = stats.DownloadRate;
                             torrentInfo.UploadSpeed = stats.UploadRate;
-                            torrentInfo.Peers = stats.ActivePeers;
-                            torrentInfo.Seeds = stats.ConnectedSeeders;
+                            torrentInfo.Peers = stats.Peers;
+                            torrentInfo.Seeds = stats.Seeds;
 
-                            // Durum güncellemesi
+                            // Durum güncellemesi - MonoTorrent.Client.TorrentState kullan
                             torrentInfo.State = manager.State switch
                             {
-                                TorrentState.Downloading => Models.TorrentState.Downloading,
-                                TorrentState.Seeding => Models.TorrentState.Seeding,
-                                TorrentState.Stopped => Models.TorrentState.Stopped,
-                                TorrentState.Paused => Models.TorrentState.Paused,
+                                MonoTorrent.Client.TorrentState.Downloading => Models.TorrentState.Downloading,
+                                MonoTorrent.Client.TorrentState.Seeding => Models.TorrentState.Seeding,
+                                MonoTorrent.Client.TorrentState.Stopped => Models.TorrentState.Stopped,
+                                MonoTorrent.Client.TorrentState.Paused => Models.TorrentState.Paused,
                                 _ => torrentInfo.State
                             };
 
