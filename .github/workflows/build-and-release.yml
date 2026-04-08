@@ -1,0 +1,118 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'  # v1.0.0 gibi tag'ler ile tetiklenir
+  workflow_dispatch:  # Manuel olarak da tetiklenebilir
+
+permissions:
+  contents: write
+  packages: read
+
+env:
+  PROJECT_NAME: TorrentClient
+  DOTNET_VERSION: '8.0.x'
+  CONFIGURATION: Release
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Restore Dependencies
+      run: dotnet restore ${{ env.PROJECT_NAME }}.csproj
+
+    - name: Build Project
+      run: dotnet build ${{ env.PROJECT_NAME }}.csproj --configuration ${{ env.CONFIGURATION }} --no-restore
+
+    - name: Run Tests (if any)
+      run: dotnet test ${{ env.PROJECT_NAME }}.csproj --configuration ${{ env.CONFIGURATION }} --no-build --verbosity normal
+      continue-on-error: true
+
+    - name: Publish Win-x64 Executable
+      run: |
+        dotnet publish ${{ env.PROJECT_NAME }}.csproj `
+          -c ${{ env.CONFIGURATION }} `
+          -r win-x64 `
+          --self-contained true `
+          -p:PublishSingleFile=true `
+          -p:IncludeNativeLibrariesForSelfExtract=true `
+          -p:EnableCompressionInSingleFile=true `
+          -o ./publish/win-x64
+
+    - name: Publish Win-x86 Executable
+      run: |
+        dotnet publish ${{ env.PROJECT_NAME }}.csproj `
+          -c ${{ env.CONFIGURATION }} `
+          -r win-x86 `
+          --self-contained true `
+          -p:PublishSingleFile=true `
+          -p:IncludeNativeLibrariesForSelfExtract=true `
+          -p:EnableCompressionInSingleFile=true `
+          -o ./publish/win-x86
+
+    - name: Create Release Archive (x64)
+      run: |
+        Compress-Archive -Path ./publish/win-x64/* -DestinationPath ./${{ env.PROJECT_NAME }}-win-x64.zip -Force
+
+    - name: Create Release Archive (x86)
+      run: |
+        Compress-Archive -Path ./publish/win-x86/* -DestinationPath ./${{ env.PROJECT_NAME }}-win-x86.zip -Force
+
+    - name: Get Tag Name
+      id: tag_name
+      run: |
+        if ($env:GITHUB_REF -match 'refs/tags/(.*)') {
+          echo "TAG=${Matches[1]}" >> $env:GITHUB_OUTPUT
+        } else {
+          echo "TAG=dev-$(Get-Date -Format 'yyyyMMdd-HHmmss')" >> $env:GITHUB_OUTPUT
+        }
+      shell: pwsh
+
+    - name: Create GitHub Release
+      id: create_release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ steps.tag_name.outputs.TAG }}
+        name: Release ${{ steps.tag_name.outputs.TAG }}
+        body: |
+          ## 🚀 Torrent Client ${{ steps.tag_name.outputs.TAG }}
+          
+          ### Değişiklikler
+          - Otomatik build ve release
+          - Windows x64 ve x86 desteği
+          - Tek dosya executable (self-contained)
+          
+          ### Kurulum
+          1. İndirdiğiniz zip dosyasını çıkarın
+          2. `TorrentClient.exe` dosyasını çalıştırın
+          
+          ### Gereksinimler
+          - Windows 10/11
+          - .NET Runtime gerekmez (self-contained build)
+        draft: false
+        prerelease: ${{ contains(github.ref, 'beta') || contains(github.ref, 'alpha') }}
+        files: |
+          ${{ env.PROJECT_NAME }}-win-x64.zip
+          ${{ env.PROJECT_NAME }}-win-x86.zip
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Upload Build Artifacts (Optional Debug)
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: build-output
+        path: ./publish/
+        retention-days: 7
